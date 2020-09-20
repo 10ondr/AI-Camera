@@ -1,0 +1,568 @@
+<style>
+  .rotate-control {
+    padding-top: 50px;
+    padding-bottom: 50px;
+  }
+  
+  .control-info {
+      padding-top: 50px;
+      font-size: 25px;
+  }
+
+  
+  #rotRight {
+    -webkit-transform: scaleX(-1);
+    transform: scaleX(-1);
+  }
+  
+  #rotRight {
+      padding-left: 100px;
+  
+  }
+  
+  #rotLeft {
+      padding-left: 100px;
+  }
+  
+  #rotRight, #rotLeft {
+    opacity: 0.5;
+  }
+  
+  #rotRight:hover,#rotLeft:hover {
+    opacity: 1.0;
+  }
+
+  .unselectable {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+  }
+
+  .tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+    margin-bottom: 100px;
+  }
+</style>
+
+<html>
+<head>
+  <title class="flex-centered">Raspberry Pi AutoTurret</title>
+  <link rel="stylesheet" type="text/css" href="/home/pi/webserver/icons.min.css">
+  <link rel="stylesheet" type="text/css" href="/home/pi/webserver/spectre.min.css">
+  <script type="text/javascript" src="/home/pi/webserver/jsoneditor.js"></script>
+</head>
+<body>
+<div class="flex-centered m-2">
+<h1>Raspberry Pi AutoTurret</h1>
+</div>
+
+<ul class="tab tab-block">
+<li class="tab-item bg-secondary active">
+  <a href="#" onclick="openTab(event, 'preview')">Preview</a>
+</li>
+<li class="tab-item">
+  <a href="#" onclick="openTab(event, 'settings')">Configuration</a>
+</li>
+</ul>
+
+<!-- Preview tab -->
+<div id="preview" class="tabcontent">
+  <div class="flex-centered m-2">
+    <img src="stream.mjpg">
+  </div>
+
+  <div class="flex-centered m-2">
+    <div class="rotate-control unselectable">
+      <img id="rotRight" class="c-hand" src="/home/pi/webserver/rotLeft.png" width="300" height="200" onClick="rotateIcon(10)" />
+      <img id="icon" src="/home/pi/webserver/icon.png" width="200" height="200" />
+      <img id="rotLeft" class="c-hand" src="/home/pi/webserver/rotLeft.png" width="300" height="200" onClick="rotateIcon(-10)" />
+    </div>
+  </div>
+  <div class="control-info flex-centered m-2">
+    Current rotation:&nbsp<span id="currentDegree">0</span>&deg
+    <button id="sendBtn" class="btn btn-primary tooltip mx-2" data-tooltip="Send a command to rotate" onclick="sendRotate();" disabled>TURN</button>
+    <div id="turnLoader" class="loading loading-lg mx-2 d-none"></div>
+    <i id="turnSuccIcon" class="icon icon-check text-success d-none"></i>
+  </div>
+  
+  <div class="flex-centered">
+    <div id="errorMsgTemplate" class="toast toast-error m-2 d-none">
+      <button onClick="removeErrorMsg(this.parentElement);" class="btn btn-clear float-right"></button>
+    </div>
+
+    <div id="errorMsgContainer" class="col-4">
+    </div>
+  </div>
+</div>
+
+<!-- Configuration tab -->
+<div id="settings" class="tabcontent">
+<div id="editor_holder">
+</div>
+
+<div class="dropdown">
+  <div class="btn-group">
+    <a class="btn btn-primary" onClick="json_submit(true)">
+      Save & Apply
+    </a>
+    <a class="btn btn-primary dropdown-toggle flex-centered" tabindex="0">
+      <i class="icon icon-caret"></i>
+    </a>
+
+    <ul class="menu">
+      <li class="menu-item">
+        <a class="btn" onClick="json_submit(false)">Just save</a>
+      </li>
+    </ul>
+  </div>
+  <span id="configLoader" class="loading loading-lg d-none" style="margin-left: 20px;"></span>
+  <i id="configSuccIcon" class="icon icon-check text-success d-none" style="font-size: 2em;"></i>
+</div>
+
+<div id="configErrorMsgContainer" class="col-4" style="margin-bottom: 20px;">
+</div>
+
+</div>
+
+<script>
+function openTab(event, id) {
+  var i, tabcontent, tabs;
+  tabcontent = document.getElementsByClassName("tabcontent");
+  for (i = 0; i < tabcontent.length; i++) {
+      tabcontent[i].style.display = "none";
+  }
+  tabs = document.getElementsByClassName("tab");
+  for (i = 0; i < tabs.length; i++) {
+      tabs[i].className = tabs[i].className.replace(" active", "");
+  }
+  document.getElementById(id).style.display = "block";
+  document.getElementById(id).style.display = "block";
+  var tab_btns = document.getElementsByClassName("tab-item");
+  for (let item of tab_btns) {
+    item.classList.remove("bg-secondary");
+    item.classList.remove("active");
+  }
+  event.currentTarget.parentElement.className += " bg-secondary active";
+}
+document.getElementById("preview").style.display = "block";
+</script>
+
+
+<script>
+last_rotation = 0;
+rotation = 0;
+
+icon_elem = document.getElementById("icon");
+degrees_elem = document.getElementById('currentDegree');
+
+err_msg_container = document.getElementById("errorMsgContainer");
+err_msg_template = document.getElementById("errorMsgTemplate");
+
+turn_loader = document.getElementById("turnLoader");
+turn_succ_icon = document.getElementById("turnSuccIcon");
+
+function updateTurnBtn(){
+var sendBtn = document.getElementById("sendBtn");
+  if(rotation == last_rotation)
+    sendBtn.disabled = true;
+  else
+    sendBtn.disabled = false;
+}
+
+function rotateIcon(degrees){
+  rotation += degrees;
+  if (rotation >= 360)
+      rotation -= 360;
+  else if(rotation < 0)
+      rotation += 360;
+  icon_elem.style.transform = "rotate(" + rotation + "deg)";
+  degrees_elem.innerHTML = rotation;
+  updateTurnBtn();
+}
+
+function removeErrorMsg(elem){
+elem.remove();
+}
+
+function createErrorMsg(parent, text){
+var clonedElem = err_msg_template.cloneNode(true);
+clonedElem.removeAttribute('id');
+clonedElem.appendChild(document.createTextNode(text));
+clonedElem.classList.remove("d-none");
+parent.appendChild(clonedElem);
+setTimeout(function(){
+  removeErrorMsg(clonedElem);
+}, 7000);
+}
+
+function sendRotate() {
+  var diff = rotation - last_rotation;
+  if(diff == 0)
+    return;
+
+  if(diff > 180)
+    diff = diff - 360;
+  else if(diff < -180)
+    diff = diff + 360;
+
+  var send_str = "";
+  if(diff < 0)
+    send_str = "L ";
+  else
+    send_str = "R ";
+  
+  send_str += Math.round(Math.abs(diff) * 1.427777)
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    turn_loader.classList.add("d-none");
+    if (this.readyState == 4) {
+      if(this.status == 200){
+        if(this.responseText == "ok"){
+          turn_succ_icon.classList.remove("d-none");
+          setTimeout(function(){
+            turn_succ_icon.classList.add("d-none");
+          }, 3000);
+          last_rotation = rotation;
+          updateTurnBtn();
+        }
+        else{
+          createErrorMsg(err_msg_container, this.responseText);
+        }
+      }
+      else{
+        if(this.statusText == "")
+          createErrorMsg(err_msg_container, "Unknown AJAX error (webserver not running?)");
+        else
+          createErrorMsg(err_msg_container, this.statusText);
+      }
+    }
+  };
+  xhttp.open("POST", "sendRot", true);
+  xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+  xhttp.send(send_str);
+  turn_loader.classList.remove("d-none");
+}
+</script>
+
+
+<script>
+config_loader = document.getElementById("configLoader");
+config_succ_icon = document.getElementById("configSuccIcon");
+
+config_err_msg_container = document.getElementById("configErrorMsgContainer");
+
+JSONEditor.defaults.options.theme = 'spectre';
+JSONEditor.defaults.options.iconlib = 'spectre';
+
+const element = document.getElementById('editor_holder');
+
+const schema = {
+  "title": "Configuration",
+  "type": "object",
+  "properties": {
+    "general": {
+      "title": "General",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "title": "Mode",
+          "type": "string",
+          "enum": [
+            "object_detection_with_PIR",
+            "object_detection_without_PIR",
+            "PIR_triggered_only",
+            "timelapse"
+          ],
+          "default": "object_detection_with_PIR"
+        },
+        "port": {
+          "title": "Webserver port",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 9998
+        }
+      }
+    },
+    "timelapse": {
+      "title": "Timelapse",
+      "type": "object",
+      "properties": {
+        "timelapse_timeout": {
+          "title": "Timeout in seconds",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 3600,
+          "default": 5
+        }
+      }
+    },
+    "object_detection": {
+      "title": "Object detection",
+      "type": "object",
+      "properties": {
+        "record_video": {
+          "title": "Start recording when an object is detected",
+          "type": "boolean",
+          "default": false
+        },
+        "capture_still": {
+          "title": "Take a photo when an object is detected",
+          "type": "boolean",
+          "default": false
+        },
+        "min_score_thresh": {
+          "title": "The object classifier has to be at least this percent certain it detected the right object",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99,
+          "default": 40
+        },
+        "min_width_thres": {
+          "title": "The device will adjust rotation if the detected object is at least this percent of image width away from the image center",
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 99,
+          "default": 20
+        },
+        "targets": {
+          "type": "array",
+          "format": "table",
+          "title": "Object detection targets",
+          "description": "Targets are prioritized from top to bottom",
+          "uniqueItems": true,
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "title": "Target",
+            "enum": [
+              "person",
+              "bicycle",
+              "car",
+              "motorcycle",
+              "airplane",
+              "bus",
+              "train",
+              "truck",
+              "boat",
+              "bird",
+              "cat",
+              "dog",
+              "horse",
+              "sheep",
+              "cow",
+              "elephant",
+              "bear",
+              "zebra",
+              "giraffe",
+              "mouse",
+              "umbrella"
+            ],
+            "default": "person"
+          }
+        }
+      }
+    },
+    "recording": {
+      "title": "Video recording",
+      "type": "object",
+      "properties": {
+        "format": {
+          "title": "Format",
+          "type": "string",
+          "enum": [
+            "h264",
+            "mjpeg",
+            "yuv",
+            "rgb",
+            "rgba",
+            "bgr",
+            "bgra"
+          ],
+          "default": "h264"
+        },
+        "resolution": {
+          "title": "Resolution",
+          "type": "object",
+          "properties": {
+            "width": {
+              "title": "Width [px]",
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 1920,
+              "default": 1920
+            },
+            "height": {
+              "title": "Height [px]",
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 1080,
+              "default": 1080
+            }
+          }
+        },
+        "fps": {
+          "title": "Framerate [frames/s]",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 90,
+          "default": 30
+        }
+      }
+    },
+    "capture": {
+      "title": "Photo capturing",
+      "type": "object",
+      "properties": {
+        "format": {
+          "title": "Format",
+          "type": "string",
+          "enum": [
+            "jpeg",
+            "png",
+            "gif",
+            "bmp",
+            "yuv",
+            "rgb",
+            "rgba",
+            "bgr",
+            "bgra"
+          ],
+          "default": "jpeg"
+        },
+        "resolution": {
+          "title": "Resolution",
+          "type": "object",
+          "properties": {
+            "width": {
+              "title": "Width [px]",
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 1920,
+              "default": 1920
+            },
+            "height": {
+              "title": "Height [px]",
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 1080,
+              "default": 1080
+            }
+          }
+        }
+      }
+    },
+    "stream": {
+      "title": "Web MJPEG stream",
+      "type": "object",
+      "properties": {
+        "resolution": {
+          "title": "Resolution",
+          "type": "object",
+          "properties": {
+            "width": {
+              "title": "Width [px]",
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 1920,
+              "default": 640
+            },
+            "height": {
+              "title": "Height [px]",
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 1080,
+              "default": 360
+            }
+          }
+        },
+        "fps": {
+          "title": "Framerate [frames/s]",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 90,
+          "default": 3
+        },
+        "bitrate": {
+          "title": "Bitrate [b/s]",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50000000,
+          "default": 5000000
+        }
+      }
+    }
+  }
+}
+
+const editor = new JSONEditor(element,{
+schema: schema,
+disable_edit_json: true,
+disable_properties: true,
+required_by_default: true,
+// Will be replaced in python with the actual JSON config data
+startval: %s
+});
+
+function isJsonSchemaValid(){
+  const errors = editor.validate();
+  if(errors.length == 0)
+    return true;
+  return false;
+}
+
+function getJsonResult(){
+  if(isJsonSchemaValid())
+    return editor.getValue();
+  else
+    return null;
+}
+
+function json_submit(apply){
+  var result = getJsonResult();
+  if(result){
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        if(this.responseText == "ok"){
+          if(apply){
+            setTimeout(function(){
+              var url = window.location.href;
+              var arr = url.split(":");
+              var address = arr[0] + ":" + arr[1];
+              location.href = address + ":" + result.general.port;
+            }, 4000);
+          }
+          else{
+            config_loader.classList.add("d-none");
+            config_succ_icon.classList.remove("d-none");
+            setTimeout(function(){
+              config_succ_icon.classList.add("d-none");
+            }, 3000);
+          }
+        }
+        else{
+          createErrorMsg(config_err_msg_container, this.responseText);
+        }
+      }
+    };
+    var path = apply ? "sendConfApply" : "sendConf";
+    xhttp.open("POST", path, true);
+    xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    xhttp.send(JSON.stringify(result));
+    config_loader.classList.remove("d-none");
+    if(!config_succ_icon.classList.contains("d-none"))
+      config_succ_icon.classList.add("d-none");
+  }
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+    "general": {
+        "mode": "object_detection_without_PIR",
+        "port": 9998
+    },
+    "timelapse": {
+        "timelapse_timeout": 10
+    },
+    "object_detection": {
+        "record_video": false,
+        "capture_still": false,
+        "min_score_thresh": 40,
+        "min_width_thres": 20,
+        "targets": [
+            "person",
+            "cat"
+        ]
+    },
+    "recording": {
+        "format": "h264",
+        "resolution": {
+            "width": 1920,
+            "height": 1080
+        },
+        "fps": 30
+    },
+    "capture": {
+        "format": "jpeg",
+        "resolution": {
+            "width": 1920,
+            "height": 1080
+        }
+    },
+    "stream": {
+        "resolution": {
+            "width": 640,
+            "height": 360
+        },
+        "fps": 3,
+        "bitrate": 5000000
+    }
+}
