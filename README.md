@@ -3,7 +3,7 @@
 The project in this repository is implementing a Raspberry Pi Zero W based device with a camera and a stepper motor, which can rotate around its vertical axis. This rotation can be initiated either from its webpage interface or based on a object detection result. [**Tensorflow**](https://www.tensorflow.org/) was used as an AI framework for the object detection itself.
 The RPi Zero sends image data to a remote server which is capable of running a tensorflow session. The implementation of the backend part (including Tensorflow) is not *yet* part of this repository.
 
-## Demo
+## Demo (YouTube video)
 <div align="left">
       <a href="https://www.youtube.com/watch?v=meXHgsdEl6E">
          <img src="https://img.youtube.com/vi/meXHgsdEl6E/0.jpg" style="width:100%;">
